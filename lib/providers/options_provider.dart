@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/option.dart';
 import '../models/option_chain.dart';
-import '../services/market_data_service.dart';
 import 'ticker_provider.dart';
 
 final selectedExpirationProvider = StateProvider<String?>((ref) => null);

@@ -30,7 +30,7 @@ class AppTheme {
         bodyMedium: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
         bodySmall: textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(

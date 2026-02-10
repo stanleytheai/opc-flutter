@@ -17,8 +17,6 @@ class _WizardScreenState extends State<WizardScreen> {
   final _pageController = PageController();
   int _currentStep = 0;
 
-  static const _stepLabels = ['Search', 'Options', 'Visualize'];
-
   void _goToStep(int step) {
     if (step < 0 || step > 2) return;
     setState(() => _currentStep = step);

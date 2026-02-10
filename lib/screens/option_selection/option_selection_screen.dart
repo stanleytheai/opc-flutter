@@ -4,7 +4,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../theme/colors.dart';
 import '../../theme/animations.dart';
 import '../../models/option.dart';
-import '../../providers/ticker_provider.dart';
 import '../../providers/options_provider.dart';
 import 'widgets/expiry_chips.dart';
 import 'widgets/option_card.dart';
@@ -22,8 +21,6 @@ class OptionSelectionScreen extends ConsumerStatefulWidget {
 
 class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  String? _selectedExpiry;
-  final Set<String> _selectedKeys = {};
 
   @override
   void initState() {
@@ -38,20 +35,28 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
   }
 
   void _toggleOption(Option option) {
-    setState(() {
-      final key = option.optionMapKey;
-      if (_selectedKeys.contains(key)) {
-        _selectedKeys.remove(key);
-      } else {
-        _selectedKeys.add(key);
-      }
-    });
+    final notifier = ref.read(selectedOptionsProvider.notifier);
+    final selected = ref.read(selectedOptionsProvider);
+    final idx = selected.indexWhere((e) => e.option.optionMapKey == option.optionMapKey);
+    if (idx >= 0) {
+      notifier.remove(idx);
+    } else {
+      // Default to buy with quantity 1
+      notifier.add(option, BuyOrSell.buy, quantity: 1);
+    }
+  }
+
+  bool _isSelected(Option option) {
+    final selected = ref.watch(selectedOptionsProvider);
+    return selected.any((e) => e.option.optionMapKey == option.optionMapKey);
   }
 
   @override
   Widget build(BuildContext context) {
-    final expirations = ref.watch(expirationsProvider);
-    final optionChain = _selectedExpiry != null ? ref.watch(optionChainProvider(_selectedExpiry!)) : null;
+    final expirations = ref.watch(optionExpirationsProvider);
+    final selectedExpiry = ref.watch(selectedExpirationProvider);
+    final chain = ref.watch(optionChainProvider);
+    final selectedCount = ref.watch(selectedOptionsProvider).length;
 
     return Column(
       children: [
@@ -61,8 +66,8 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
           child: expirations.when(
             data: (dates) => ExpiryChips(
               expirations: dates,
-              selected: _selectedExpiry,
-              onSelected: (d) => setState(() => _selectedExpiry = d),
+              selected: selectedExpiry,
+              onSelected: (d) => ref.read(selectedExpirationProvider.notifier).state = d,
             ),
             loading: () => const SizedBox(
               height: 48,
@@ -87,20 +92,25 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
 
         // Options list
         Expanded(
-          child: optionChain == null
+          child: selectedExpiry == null
               ? Center(
                   child: Text(
                     'Select an expiration date',
                     style: Theme.of(context).textTheme.bodyMedium,
                   ).animate().fadeIn(duration: Anim.medium),
                 )
-              : optionChain.when(
-                  data: (chain) {
+              : chain.when(
+                  data: (chainData) {
+                    if (chainData == null) {
+                      return Center(child: Text('No data', style: Theme.of(context).textTheme.bodyMedium));
+                    }
+                    final calls = chainData.callsForExpiry(selectedExpiry);
+                    final puts = chainData.putsForExpiry(selectedExpiry);
                     return TabBarView(
                       controller: _tabController,
                       children: [
-                        _buildOptionList(chain.where((o) => o.callOrPut == OptionType.call).toList()),
-                        _buildOptionList(chain.where((o) => o.callOrPut == OptionType.put).toList()),
+                        _buildOptionList(calls),
+                        _buildOptionList(puts),
                       ],
                     );
                   },
@@ -112,9 +122,9 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
         ),
 
         // Bottom summary bar
-        if (_selectedKeys.isNotEmpty)
+        if (selectedCount > 0)
           SelectionSummary(
-            selectedCount: _selectedKeys.length,
+            selectedCount: selectedCount,
             onNext: widget.onNext,
           ).animate().slideY(begin: 1, end: 0, duration: Anim.fast, curve: Anim.snappy),
       ],
@@ -132,7 +142,7 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
         final o = options[i];
         return OptionCard(
           option: o,
-          isSelected: _selectedKeys.contains(o.optionMapKey),
+          isSelected: _isSelected(o),
           onTap: () => _toggleOption(o),
         ).animate().fadeIn(
           duration: Anim.fast,

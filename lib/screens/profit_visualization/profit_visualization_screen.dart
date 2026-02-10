@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../theme/colors.dart';
 import '../../theme/animations.dart';
-import '../../providers/ticker_provider.dart';
 import '../../providers/calculation_provider.dart';
 import 'widgets/heatmap_grid.dart';
 import 'widgets/profit_detail_card.dart';
@@ -27,6 +26,12 @@ class _ProfitVisualizationScreenState extends ConsumerState<ProfitVisualizationS
 
     return profitTable.when(
       data: (table) {
+        if (table == null) {
+          return Center(
+            child: Text('Select options to see profit visualization',
+                style: Theme.of(context).textTheme.bodyMedium),
+          );
+        }
         return Column(
           children: [
             // Header

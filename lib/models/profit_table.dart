@@ -28,4 +28,21 @@ class ProfitTable {
 
   double get minValue =>
       data.values.isEmpty ? 0 : data.values.reduce((a, b) => a < b ? a : b);
+
+  /// Alias for xAxis (date strings).
+  List<String> get dates => xAxis;
+
+  /// Alias for yAxis (stock prices).
+  List<double> get prices => yAxis;
+
+  /// 2D array accessor: values[row][col] where row=price index, col=date index.
+  late final List<List<double>> values = _buildValues();
+
+  List<List<double>> _buildValues() {
+    return List.generate(yAxis.length, (r) {
+      return List.generate(xAxis.length, (c) {
+        return data[generateKey(xAxis[c], yAxis[r])] ?? 0.0;
+      });
+    });
+  }
 }

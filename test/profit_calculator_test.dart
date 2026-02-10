@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opc_flutter/models/option.dart';
-import 'package:opc_flutter/models/profit_table.dart';
 import 'package:opc_flutter/services/profit_calculator.dart';
 
 void main() {

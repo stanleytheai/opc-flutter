@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/ticker.dart';
 import '../models/option.dart';
-import '../models/option_chain.dart';
-
 class MarketDataService {
   static const _baseUrl = 'https://sandbox.tradier.com/v1/markets';
   static const _token = 'Bearer vhelrOcGiNAYi6XnpM3z4IU93oi4';
@@ -29,8 +27,8 @@ class MarketDataService {
     if (json['securities'] == null) return [];
     var securities = json['securities']['security'];
     if (securities is! List) securities = [securities];
-    return (securities as List)
-        .map((s) => TickerSearchResult.fromTradierJson(s))
+    return securities
+        .map((s) => TickerSearchResult.fromTradierJson(s as Map<String, dynamic>))
         .toList();
   }
 

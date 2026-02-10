@@ -18,6 +18,21 @@ final tickerSearchResultsProvider =
 
 final selectedTickerSymbolProvider = StateProvider<String?>((ref) => null);
 
+/// Family provider for one-off ticker search (used by search screen).
+final tickerSearchProvider =
+    FutureProvider.family<List<TickerSearchResult>, String>((ref, query) async {
+  if (query.length < 2) return [];
+  final service = ref.read(marketDataServiceProvider);
+  return service.searchTickers(query);
+});
+
+/// Family provider for one-off quote lookup.
+final tickerQuoteProvider =
+    FutureProvider.family<Ticker, String>((ref, symbol) async {
+  final service = ref.read(marketDataServiceProvider);
+  return service.getQuote(symbol);
+});
+
 final selectedTickerProvider = FutureProvider<Ticker?>((ref) async {
   final symbol = ref.watch(selectedTickerSymbolProvider);
   if (symbol == null) return null;

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../../theme/colors.dart';
 import '../../theme/animations.dart';
 import '../../models/ticker.dart';
 import '../../providers/ticker_provider.dart';
@@ -48,6 +47,8 @@ class _TickerSearchScreenState extends ConsumerState<TickerSearchScreen> {
     });
     try {
       final ticker = await ref.read(tickerQuoteProvider(result.symbol).future);
+      // Wire into global state so other screens can access
+      ref.read(selectedTickerSymbolProvider.notifier).state = result.symbol;
       if (mounted) setState(() => _selected = ticker);
     } catch (_) {
     } finally {
