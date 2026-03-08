@@ -20,29 +20,45 @@ class GradientCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = AppColors.profitColor(profitPercent);
+    final alpha = isSelected
+        ? 1.0
+        : isCrosshair
+            ? 0.45
+            : 0.82;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.all(1),
+      margin: const EdgeInsets.all(0.75),
       decoration: BoxDecoration(
-        color: isCrosshair
-            ? color.withValues(alpha: 0.55)
-            : color.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(4),
+        color: color.withValues(alpha: alpha),
+        borderRadius: BorderRadius.circular(3),
         border: isSelected
             ? Border.all(color: Colors.white, width: 2)
             : isCurrentPrice
-                ? Border.all(color: AppColors.primary.withValues(alpha: 0.6), width: 1)
+                ? Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.5), width: 1)
                 : null,
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                )
+              ]
+            : null,
       ),
       alignment: Alignment.center,
       child: isSelected
           ? Text(
-              value >= 0 ? '+${value.toStringAsFixed(0)}' : value.toStringAsFixed(0),
+              value >= 0
+                  ? '+${value.toStringAsFixed(0)}'
+                  : value.toStringAsFixed(0),
               style: const TextStyle(
                 fontSize: 9,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 color: Colors.white,
+                shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
               ),
             )
           : null,

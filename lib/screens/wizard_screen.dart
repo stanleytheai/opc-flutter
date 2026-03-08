@@ -20,10 +20,11 @@ class WizardScreen extends ConsumerStatefulWidget {
   ConsumerState<WizardScreen> createState() => _WizardScreenState();
 }
 
-class _WizardScreenState extends ConsumerState<WizardScreen> {
-  final _pageController = PageController();
+class _WizardScreenState extends ConsumerState<WizardScreen>
+    with SingleTickerProviderStateMixin {
   int _currentStep = 0;
-  bool _restoredFromUrl = false;
+  int _previousStep = 0;
+  bool _isTransitioning = false;
 
   @override
   void initState() {
@@ -48,8 +49,6 @@ class _WizardScreenState extends ConsumerState<WizardScreen> {
       // Restore settings
       ref.read(settingsProvider.notifier).setAll(decoded.settings);
 
-      _restoredFromUrl = true;
-
       if (decoded.legs.isNotEmpty) {
         // Restore legs by fetching option chain data and matching
         _restoreLegs(decoded.ticker, decoded.legs);
@@ -60,7 +59,8 @@ class _WizardScreenState extends ConsumerState<WizardScreen> {
   }
 
   /// Fetch option chain data and restore legs from URL parameters.
-  Future<void> _restoreLegs(String ticker, List<SelectedLegParams> legParams) async {
+  Future<void> _restoreLegs(
+      String ticker, List<SelectedLegParams> legParams) async {
     try {
       final service = ref.read(marketDataServiceProvider);
       final notifier = ref.read(selectedOptionsProvider.notifier);
@@ -109,19 +109,42 @@ class _WizardScreenState extends ConsumerState<WizardScreen> {
   }
 
   void _goToStep(int step) {
-    if (step < 0 || step > 2) return;
-    setState(() => _currentStep = step);
-    _pageController.animateToPage(
-      step,
-      duration: Anim.medium,
-      curve: Anim.smooth,
-    );
+    if (step < 0 || step > 2 || step == _currentStep) return;
+    if (_isTransitioning) return;
+
+    setState(() {
+      _previousStep = _currentStep;
+      _currentStep = step;
+      _isTransitioning = true;
+    });
+
+    // Reset transition lock after animation completes
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) setState(() => _isTransitioning = false);
+    });
   }
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+  Widget _buildStep() {
+    switch (_currentStep) {
+      case 0:
+        return TickerSearchScreen(
+          key: const ValueKey(0),
+          onNext: () => _goToStep(1),
+        );
+      case 1:
+        return OptionSelectionScreen(
+          key: const ValueKey(1),
+          onNext: () => _goToStep(2),
+          onBack: () => _goToStep(0),
+        );
+      case 2:
+        return ProfitVisualizationScreen(
+          key: const ValueKey(2),
+          onBack: () => _goToStep(1),
+        );
+      default:
+        return const SizedBox.shrink();
+    }
   }
 
   @override
@@ -132,20 +155,42 @@ class _WizardScreenState extends ConsumerState<WizardScreen> {
           children: [
             _buildStepIndicator(),
             Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (i) => setState(() => _currentStep = i),
-                children: [
-                  TickerSearchScreen(onNext: () => _goToStep(1)),
-                  OptionSelectionScreen(
-                    onNext: () => _goToStep(2),
-                    onBack: () => _goToStep(0),
-                  ),
-                  ProfitVisualizationScreen(
-                    onBack: () => _goToStep(1),
-                  ),
-                ],
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 450),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                transitionBuilder: (child, animation) {
+                  // Determine if this is the entering or exiting widget
+                  final isForward = _currentStep > _previousStep;
+                  final isEntering =
+                      (child.key as ValueKey).value == _currentStep;
+
+                  // Slide direction based on navigation direction
+                  final slideOffset = isEntering
+                      ? Tween<Offset>(
+                          begin: Offset(isForward ? 0.05 : -0.05, 0),
+                          end: Offset.zero,
+                        )
+                      : Tween<Offset>(
+                          begin: Offset.zero,
+                          end: Offset(isForward ? -0.05 : 0.05, 0),
+                        );
+
+                  return SlideTransition(
+                    position: slideOffset.animate(CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    )),
+                    child: FadeTransition(
+                      opacity: CurvedAnimation(
+                        parent: animation,
+                        curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
+                      ),
+                      child: child,
+                    ),
+                  );
+                },
+                child: _buildStep(),
               ),
             ),
           ],
@@ -160,13 +205,16 @@ class _WizardScreenState extends ConsumerState<WizardScreen> {
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
       child: Row(
         children: [
-          if (_currentStep > 0)
-            IconButton(
-              onPressed: () => _goToStep(_currentStep - 1),
-              icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textSecondary),
-            )
-          else
-            const SizedBox(width: 48),
+          AnimatedOpacity(
+            duration: Anim.fast,
+            opacity: _currentStep > 0 ? 1.0 : 0.0,
+            child: IconButton(
+              onPressed:
+                  _currentStep > 0 ? () => _goToStep(_currentStep - 1) : null,
+              icon: const Icon(Icons.arrow_back_rounded,
+                  color: AppColors.textSecondary),
+            ),
+          ),
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -192,17 +240,23 @@ class _WizardScreenState extends ConsumerState<WizardScreen> {
                                   : AppColors.surfaceLight,
                         ),
                       ),
-                      if (isActive) ...[
-                        const SizedBox(width: 6),
-                        Text(
-                          labels[i],
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                      AnimatedSize(
+                        duration: Anim.fast,
+                        curve: Anim.snappy,
+                        child: isActive
+                            ? Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Text(
+                                  labels[i],
+                                  style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
                     ],
                   ),
                 );
