@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../theme/colors.dart';
 import '../../../models/profit_table.dart';
-import '../../../widgets/gradient_cell.dart';
 
 class HeatmapGrid extends StatefulWidget {
   final ProfitTable table;
@@ -26,19 +25,24 @@ class HeatmapGrid extends StatefulWidget {
 
 class _HeatmapGridState extends State<HeatmapGrid> {
   final _verticalController = ScrollController();
+  final _priceLabelController = ScrollController();
   final _headerHorizontalController = ScrollController();
   final _gridHorizontalController = ScrollController();
-  static const double _cellHeight = 36.0;
-  static const double _cellWidth = 64.0;
-  static const double _priceLabelWidth = 68.0;
-  static const double _dateHeaderHeight = 28.0;
+  static const double _cellHeight = 38.0;
+  static const double _cellWidth = 62.0;
+  static const double _priceLabelWidth = 72.0;
+  static const double _dateHeaderHeight = 32.0;
+  static const double _cellGap = 1.5;
+  static const double _cellRadius = 3.0;
   bool _syncingScroll = false;
+  bool _didInitialScroll = false;
 
   @override
   void initState() {
     super.initState();
     _headerHorizontalController.addListener(_syncHeaderToGrid);
     _gridHorizontalController.addListener(_syncGridToHeader);
+    _verticalController.addListener(_syncGridToPrice);
   }
 
   void _syncHeaderToGrid() {
@@ -59,9 +63,19 @@ class _HeatmapGridState extends State<HeatmapGrid> {
     _syncingScroll = false;
   }
 
+  void _syncGridToPrice() {
+    if (_syncingScroll) return;
+    _syncingScroll = true;
+    if (_priceLabelController.hasClients) {
+      _priceLabelController.jumpTo(_verticalController.offset);
+    }
+    _syncingScroll = false;
+  }
+
   @override
   void dispose() {
     _verticalController.dispose();
+    _priceLabelController.dispose();
     _headerHorizontalController.dispose();
     _gridHorizontalController.dispose();
     super.dispose();
@@ -94,6 +108,28 @@ class _HeatmapGridState extends State<HeatmapGrid> {
     return null;
   }
 
+  /// Scroll to center the current stock price row after initial build.
+  void _scrollToCurrentPrice() {
+    if (_didInitialScroll) return;
+    _didInitialScroll = true;
+
+    final priceRow = _currentPriceRow();
+    if (priceRow == null) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_verticalController.hasClients) return;
+      final viewHeight = _verticalController.position.viewportDimension;
+      final targetOffset =
+          (priceRow * _cellHeight - viewHeight / 2 + _cellHeight / 2)
+              .clamp(0.0, _verticalController.position.maxScrollExtent);
+      _verticalController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final rows = widget.table.prices.length;
@@ -115,8 +151,11 @@ class _HeatmapGridState extends State<HeatmapGrid> {
     final currentPriceRow = _currentPriceRow();
     final todayCol = _todayCol();
 
+    // Auto-scroll to current price on first build
+    _scrollToCurrentPrice();
+
     return Padding(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(4),
       child: Column(
         children: [
           // Date header row
@@ -162,109 +201,104 @@ class _HeatmapGridState extends State<HeatmapGrid> {
             ),
           ),
 
-          // Scrollable heatmap grid
+          // Heatmap body
           Expanded(
             child: Row(
               children: [
-                // Price labels column — synced vertically with grid
+                // Price labels column — synced vertically
                 SizedBox(
                   width: _priceLabelWidth,
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: (n) => true,
-                    child: ListView.builder(
-                      controller: _verticalController,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: rows,
-                      itemExtent: _cellHeight,
-                      itemBuilder: (_, r) {
-                        final isBreakeven = _isBreakevenRow(r, cols);
-                        final isCurrentPrice = r == currentPriceRow;
-                        final isSelectedRow = r == widget.selectedRow;
-                        return SizedBox(
-                          height: _cellHeight,
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Text(
-                                '\$${widget.table.prices[r].toStringAsFixed(0)}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isCurrentPrice
-                                      ? AppColors.primary
-                                      : isBreakeven
-                                          ? AppColors.primaryLight
-                                          : isSelectedRow
-                                              ? AppColors.textPrimary
-                                              : AppColors.textSecondary,
-                                  fontWeight: isCurrentPrice || isBreakeven || isSelectedRow
-                                      ? FontWeight.w700
-                                      : FontWeight.w400,
+                  child: ListView.builder(
+                    controller: _priceLabelController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: rows,
+                    itemExtent: _cellHeight,
+                    itemBuilder: (_, r) {
+                      final isCurrentPrice = r == currentPriceRow;
+                      final isSelectedRow = r == widget.selectedRow;
+                      return Container(
+                        height: _cellHeight,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 6),
+                        decoration: isCurrentPrice
+                            ? BoxDecoration(
+                                border: Border(
+                                  right: BorderSide(
+                                    color:
+                                        AppColors.primary.withValues(alpha: 0.6),
+                                    width: 2,
+                                  ),
                                 ),
-                              ),
-                            ),
+                              )
+                            : null,
+                        child: Text(
+                          '\$${widget.table.prices[r].toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isCurrentPrice
+                                ? AppColors.primary
+                                : isSelectedRow
+                                    ? AppColors.textPrimary
+                                    : AppColors.textSecondary,
+                            fontWeight: isCurrentPrice || isSelectedRow
+                                ? FontWeight.w700
+                                : FontWeight.w400,
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
                   ),
                 ),
 
-                // Grid cells — scrolls both directions
+                // Grid cells — bi-directional scroll
                 Expanded(
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     controller: _gridHorizontalController,
                     child: SizedBox(
                       width: _cellWidth * cols,
-                      child: NotificationListener<ScrollNotification>(
-                        onNotification: (notification) {
-                          if (notification is ScrollUpdateNotification &&
-                              _verticalController.hasClients) {
-                            _verticalController.jumpTo(notification.metrics.pixels);
-                          }
-                          return false;
-                        },
-                        child: ListView.builder(
-                          itemCount: rows,
-                          itemExtent: _cellHeight,
-                          itemBuilder: (_, r) {
-                            final isCurrentPriceRow = r == currentPriceRow;
-                            return SizedBox(
-                              height: _cellHeight,
-                              child: Row(
-                                children: List.generate(cols, (c) {
-                                  final value = widget.table.values[r][c];
-                                  final pct = (value / maxAbs * 100).clamp(-100.0, 100.0);
-                                  final isSelected =
-                                      r == widget.selectedRow && c == widget.selectedCol;
-                                  final isCrosshair = !isSelected &&
-                                      (r == widget.selectedRow || c == widget.selectedCol);
+                      child: ListView.builder(
+                        controller: _verticalController,
+                        itemCount: rows,
+                        itemExtent: _cellHeight,
+                        itemBuilder: (_, r) {
+                          return SizedBox(
+                            height: _cellHeight,
+                            child: Row(
+                              children: List.generate(cols, (c) {
+                                final value = widget.table.values[r][c];
+                                final pct =
+                                    (value / maxAbs * 100).clamp(-100.0, 100.0);
+                                final isSelected = r == widget.selectedRow &&
+                                    c == widget.selectedCol;
+                                final isCrosshair = !isSelected &&
+                                    (r == widget.selectedRow ||
+                                        c == widget.selectedCol);
+                                final isCurrentPriceRow = r == currentPriceRow;
 
-                                  return SizedBox(
+                                return GestureDetector(
+                                  onTap: () => widget.onCellTap(r, c),
+                                  child: _HeatmapCell(
                                     width: _cellWidth,
-                                    child: GestureDetector(
-                                      onTap: () => widget.onCellTap(r, c),
-                                      child: GradientCell(
-                                        profitPercent: pct,
-                                        value: value,
-                                        isSelected: isSelected,
-                                        isCrosshair: isCrosshair,
-                                        isCurrentPrice: isCurrentPriceRow && !isSelected,
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            );
-                          },
-                        ),
+                                    height: _cellHeight,
+                                    profitPercent: pct,
+                                    value: value,
+                                    isSelected: isSelected,
+                                    isCrosshair: isCrosshair,
+                                    isCurrentPrice:
+                                        isCurrentPriceRow && !isSelected,
+                                  ),
+                                );
+                              }),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
                 ),
               ],
-            ).animate().fadeIn(duration: const Duration(milliseconds: 300)),
+            ).animate().fadeIn(duration: const Duration(milliseconds: 400)),
           ),
         ],
       ),
@@ -280,14 +314,75 @@ class _HeatmapGridState extends State<HeatmapGrid> {
     } catch (_) {}
     return isoDate;
   }
+}
 
-  bool _isBreakevenRow(int r, int cols) {
-    if (r == 0) return false;
-    for (int c = 0; c < cols; c++) {
-      final prev = widget.table.values[r - 1][c];
-      final curr = widget.table.values[r][c];
-      if ((prev <= 0 && curr >= 0) || (prev >= 0 && curr <= 0)) return true;
-    }
-    return false;
+/// Individual heatmap cell — lightweight widget with gradient color.
+class _HeatmapCell extends StatelessWidget {
+  final double width;
+  final double height;
+  final double profitPercent;
+  final double value;
+  final bool isSelected;
+  final bool isCrosshair;
+  final bool isCurrentPrice;
+
+  const _HeatmapCell({
+    required this.width,
+    required this.height,
+    required this.profitPercent,
+    required this.value,
+    this.isSelected = false,
+    this.isCrosshair = false,
+    this.isCurrentPrice = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Use the Angular-style gradient for a smooth red→white→green look
+    final baseColor = AppColors.profitColor(profitPercent);
+    final alpha = isSelected
+        ? 1.0
+        : isCrosshair
+            ? 0.45
+            : 0.82;
+
+    return Container(
+      width: width,
+      height: height,
+      margin: const EdgeInsets.all(0.75),
+      decoration: BoxDecoration(
+        color: baseColor.withValues(alpha: alpha),
+        borderRadius: BorderRadius.circular(3),
+        border: isSelected
+            ? Border.all(color: Colors.white, width: 2)
+            : isCurrentPrice
+                ? Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.5), width: 1)
+                : null,
+        boxShadow: isSelected
+            ? [
+                BoxShadow(
+                  color: baseColor.withValues(alpha: 0.4),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                )
+              ]
+            : null,
+      ),
+      alignment: Alignment.center,
+      child: isSelected
+          ? Text(
+              value >= 0
+                  ? '+${value.toStringAsFixed(0)}'
+                  : value.toStringAsFixed(0),
+              style: const TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+              ),
+            )
+          : null,
+    );
   }
 }

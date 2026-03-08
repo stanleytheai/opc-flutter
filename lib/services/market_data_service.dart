@@ -7,7 +7,12 @@ import '../models/option.dart';
 class MarketDataService {
   static const _baseUrl = 'https://sandbox.tradier.com/v1/markets';
   static const _token = 'Bearer vhelrOcGiNAYi6XnpM3z4IU93oi4';
-  static const _corsProxy = 'https://corsproxy.io/?';
+
+  /// CORS proxies to try in order (web only).
+  static const _corsProxies = [
+    'https://corsproxy.io/?',
+    'https://api.allorigins.win/raw?url=',
+  ];
 
   final http.Client _client;
   final Map<String, dynamic> _cache = {};
@@ -23,11 +28,46 @@ class MarketDataService {
     final key = uri.toString();
     if (_cache.containsKey(key)) return _cache[key] as Map<String, dynamic>;
 
-    final url = kIsWeb ? Uri.parse('$_corsProxy${uri.toString()}') : uri;
-    final response = await _client.get(url, headers: _headers);
-    final json = jsonDecode(response.body) as Map<String, dynamic>;
-    _cache[key] = json;
-    return json;
+    if (!kIsWeb) {
+      // Direct call for non-web platforms
+      final response = await _client.get(uri, headers: _headers);
+      if (response.statusCode != 200) {
+        throw Exception('API error: ${response.statusCode}');
+      }
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      _cache[key] = json;
+      return json;
+    }
+
+    // Web: try CORS proxies in order
+    Exception? lastError;
+    for (final proxy in _corsProxies) {
+      try {
+        final proxyUrl =
+            Uri.parse('$proxy${Uri.encodeComponent(uri.toString())}');
+        final response = await _client.get(proxyUrl, headers: _headers);
+        if (response.statusCode == 200) {
+          final json = jsonDecode(response.body) as Map<String, dynamic>;
+          _cache[key] = json;
+          return json;
+        }
+        lastError = Exception('HTTP ${response.statusCode}');
+      } catch (e) {
+        lastError = e is Exception ? e : Exception(e.toString());
+      }
+    }
+
+    // All proxies failed — try direct (may work if CORS headers are present)
+    try {
+      final response = await _client.get(uri, headers: _headers);
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        _cache[key] = json;
+        return json;
+      }
+    } catch (_) {}
+
+    throw lastError ?? Exception('All CORS proxies failed');
   }
 
   Future<List<TickerSearchResult>> searchTickers(String query) async {
@@ -41,7 +81,8 @@ class MarketDataService {
     var securities = json['securities']['security'];
     if (securities is! List) securities = [securities];
     return securities
-        .map((s) => TickerSearchResult.fromTradierJson(s as Map<String, dynamic>))
+        .map((s) =>
+            TickerSearchResult.fromTradierJson(s as Map<String, dynamic>))
         .toList();
   }
 

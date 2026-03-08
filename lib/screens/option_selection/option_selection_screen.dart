@@ -6,7 +6,7 @@ import '../../theme/animations.dart';
 import '../../models/option.dart';
 import '../../providers/options_provider.dart';
 import '../../providers/calculation_provider.dart';
-import '../../screens/settings/settings_sheet.dart';
+import '../settings/settings_sheet.dart';
 import 'widgets/expiry_chips.dart';
 import 'widgets/option_card.dart';
 import 'widgets/selection_summary.dart';
