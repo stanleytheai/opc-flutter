@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/colors.dart';
 import '../theme/animations.dart';
 import '../models/option.dart';
@@ -9,6 +8,8 @@ import '../services/url_state_service.dart';
 import '../providers/ticker_provider.dart';
 import '../providers/options_provider.dart';
 import '../providers/settings_provider.dart';
+import '../widgets/ticker_header.dart';
+import '../screens/settings/settings_sheet.dart';
 import 'ticker_search/ticker_search_screen.dart';
 import 'option_selection/option_selection_screen.dart';
 import 'profit_visualization/profit_visualization_screen.dart';
@@ -32,50 +33,33 @@ class _WizardScreenState extends ConsumerState<WizardScreen>
     _tryRestoreFromUrl();
   }
 
-  /// Try to restore state from URL query parameters (web only).
   void _tryRestoreFromUrl() {
     if (!kIsWeb) return;
-
     try {
       final uri = Uri.base;
       if (uri.queryParameters.isEmpty) return;
-
       final decoded = UrlStateService.decode(uri.queryParameters);
       if (decoded == null) return;
-
-      // Restore ticker
       ref.read(selectedTickerSymbolProvider.notifier).state = decoded.ticker;
-
-      // Restore settings
       ref.read(settingsProvider.notifier).setAll(decoded.settings);
-
       if (decoded.legs.isNotEmpty) {
-        // Restore legs by fetching option chain data and matching
         _restoreLegs(decoded.ticker, decoded.legs);
       }
-    } catch (_) {
-      // Silently ignore URL parse errors
-    }
+    } catch (_) {}
   }
 
-  /// Fetch option chain data and restore legs from URL parameters.
   Future<void> _restoreLegs(
       String ticker, List<SelectedLegParams> legParams) async {
     try {
       final service = ref.read(marketDataServiceProvider);
       final notifier = ref.read(selectedOptionsProvider.notifier);
-
-      // Group legs by expiry to minimize API calls
       final expiries = legParams.map((l) => l.expiry).toSet();
-
       for (final expiry in expiries) {
         final options = await service.getOptionChain(ticker, expiry);
         final optionMap = <String, Option>{};
         for (final opt in options) {
           optionMap[opt.optionMapKey] = opt;
         }
-
-        // Match each leg for this expiry
         for (final leg in legParams.where((l) => l.expiry == expiry)) {
           final key = '${leg.expiry}:${leg.strike}:${leg.callOrPut.code}';
           final option = optionMap[key];
@@ -84,41 +68,27 @@ class _WizardScreenState extends ConsumerState<WizardScreen>
           }
         }
       }
-
-      // Set the first expiry as selected
       if (expiries.isNotEmpty) {
         ref.read(selectedExpirationProvider.notifier).state = expiries.first;
       }
-
-      // Jump to visualization if legs were restored
       if (ref.read(selectedOptionsProvider).isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _goToStep(2);
-        });
+        WidgetsBinding.instance.addPostFrameCallback((_) => _goToStep(2));
       } else {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _goToStep(1);
-        });
+        WidgetsBinding.instance.addPostFrameCallback((_) => _goToStep(1));
       }
     } catch (_) {
-      // If restoration fails, go to option selection
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _goToStep(1);
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _goToStep(1));
     }
   }
 
   void _goToStep(int step) {
     if (step < 0 || step > 2 || step == _currentStep) return;
     if (_isTransitioning) return;
-
     setState(() {
       _previousStep = _currentStep;
       _currentStep = step;
       _isTransitioning = true;
     });
-
-    // Reset transition lock after animation completes
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) setState(() => _isTransitioning = false);
     });
@@ -149,23 +119,26 @@ class _WizardScreenState extends ConsumerState<WizardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final hasSymbol = ref.watch(selectedTickerSymbolProvider) != null;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
-            _buildStepIndicator(),
+            // Top bar: back arrow + progress + settings gear
+            _buildTopBar(),
+            // Persistent ticker header (visible after selection)
+            if (hasSymbol && _currentStep > 0) const TickerHeader(),
+            // Screen content
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 450),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
                 transitionBuilder: (child, animation) {
-                  // Determine if this is the entering or exiting widget
                   final isForward = _currentStep > _previousStep;
                   final isEntering =
                       (child.key as ValueKey).value == _currentStep;
-
-                  // Slide direction based on navigation direction
                   final slideOffset = isEntering
                       ? Tween<Offset>(
                           begin: Offset(isForward ? 0.05 : -0.05, 0),
@@ -175,7 +148,6 @@ class _WizardScreenState extends ConsumerState<WizardScreen>
                           begin: Offset.zero,
                           end: Offset(isForward ? -0.05 : 0.05, 0),
                         );
-
                   return SlideTransition(
                     position: slideOffset.animate(CurvedAnimation(
                       parent: animation,
@@ -184,7 +156,8 @@ class _WizardScreenState extends ConsumerState<WizardScreen>
                     child: FadeTransition(
                       opacity: CurvedAnimation(
                         parent: animation,
-                        curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
+                        curve:
+                            const Interval(0.0, 0.8, curve: Curves.easeOut),
                       ),
                       child: child,
                     ),
@@ -199,73 +172,82 @@ class _WizardScreenState extends ConsumerState<WizardScreen>
     );
   }
 
-  Widget _buildStepIndicator() {
-    final labels = ['Search', 'Select', 'Visualize'];
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+  Widget _buildTopBar() {
+    final labels = ['Search', 'Options', 'P&L'];
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
+          // Back arrow
           AnimatedOpacity(
             duration: Anim.fast,
             opacity: _currentStep > 0 ? 1.0 : 0.0,
             child: IconButton(
               onPressed:
                   _currentStep > 0 ? () => _goToStep(_currentStep - 1) : null,
-              icon: const Icon(Icons.arrow_back_rounded,
-                  color: AppColors.textSecondary),
+              icon: const Icon(Icons.arrow_back_rounded, size: 20),
+              color: AppColors.textSecondary,
+              iconSize: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             ),
           ),
+          const SizedBox(width: 4),
+          // Breadcrumb navigation
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(3, (i) {
                 final isActive = i == _currentStep;
                 final isDone = i < _currentStep;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedContainer(
-                        duration: Anim.fast,
-                        curve: Anim.snappy,
-                        width: isActive ? 40 : 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(6),
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (i > 0)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 14,
+                          color: isDone
+                              ? AppColors.primary.withValues(alpha: 0.5)
+                              : AppColors.textMuted.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    GestureDetector(
+                      onTap: isDone ? () => _goToStep(i) : null,
+                      child: Text(
+                        labels[i],
+                        style: TextStyle(
                           color: isActive
                               ? AppColors.primary
                               : isDone
-                                  ? AppColors.primary.withValues(alpha: 0.5)
-                                  : AppColors.surfaceLight,
+                                  ? AppColors.textSecondary
+                                  : AppColors.textMuted,
+                          fontWeight:
+                              isActive ? FontWeight.w600 : FontWeight.w400,
+                          fontSize: 12,
                         ),
                       ),
-                      AnimatedSize(
-                        duration: Anim.fast,
-                        curve: Anim.snappy,
-                        child: isActive
-                            ? Padding(
-                                padding: const EdgeInsets.only(left: 6),
-                                child: Text(
-                                  labels[i],
-                                  style: const TextStyle(
-                                    color: AppColors.primary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               }),
             ),
           ),
-          const SizedBox(width: 48),
+          // Thin progress bar
+          const SizedBox(width: 4),
+          // Settings gear
+          IconButton(
+            onPressed: () => SettingsSheet.show(context),
+            icon: const Icon(Icons.settings_rounded, size: 18),
+            color: AppColors.textMuted,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
         ],
       ),
-    ).animate().fadeIn(duration: Anim.medium);
+    );
   }
 }

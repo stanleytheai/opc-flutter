@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../theme/colors.dart';
 import '../../theme/animations.dart';
 import '../../providers/calculation_provider.dart';
@@ -57,7 +58,7 @@ class _ProfitVisualizationScreenState
         content: const Text('Link copied to clipboard'),
         backgroundColor: AppColors.surfaceLight,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -91,7 +92,8 @@ class _ProfitVisualizationScreenState
           children: [
             // Header bar
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               child: Row(
                 children: [
                   Expanded(
@@ -99,26 +101,31 @@ class _ProfitVisualizationScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Profit & Loss',
-                            style: Theme.of(context).textTheme.headlineMedium),
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontSize: 18)),
                         if (strategy != null)
                           Padding(
-                            padding: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.only(top: 1),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 8,
-                                  height: 8,
+                                  width: 6,
+                                  height: 6,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: _sentimentColor(strategy.sentiment),
+                                    color:
+                                        _sentimentColor(strategy.sentiment),
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 5),
                                 Text(
                                   strategy.name,
                                   style: TextStyle(
-                                    color: _sentimentColor(strategy.sentiment),
-                                    fontSize: 13,
+                                    color:
+                                        _sentimentColor(strategy.sentiment),
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -128,12 +135,9 @@ class _ProfitVisualizationScreenState
                       ],
                     ),
                   ),
-                  _headerButton(Icons.tune_rounded, 'Settings',
-                      () => SettingsSheet.show(context)),
+                  _headerButton(Icons.share_rounded, 'Share', _shareLink),
                   _headerButton(
-                      Icons.share_rounded, 'Share link', _shareLink),
-                  _headerButton(
-                      Icons.edit_rounded, 'Edit options', widget.onBack),
+                      Icons.edit_rounded, 'Edit', widget.onBack),
                 ],
               ),
             )
@@ -151,27 +155,24 @@ class _ProfitVisualizationScreenState
             // Legend
             Padding(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
               child: Row(
                 children: [
                   _legendDot(AppColors.loss, 'Loss'),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   _legendDot(const Color(0xFF455A64), 'Breakeven'),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   _legendDot(AppColors.profit, 'Profit'),
                   const Spacer(),
                   Text(
-                    'X: Date  Y: Stock Price',
-                    style: TextStyle(
-                      color: AppColors.textMuted,
-                      fontSize: 10,
-                    ),
+                    'X: Date  Y: Price',
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 9),
                   ),
                 ],
               ),
             ),
 
-            // Heatmap (hero section)
+            // Heatmap
             Expanded(
               child: HeatmapGrid(
                 table: table,
@@ -181,7 +182,6 @@ class _ProfitVisualizationScreenState
                 onCellTap: (row, col) {
                   setState(() {
                     if (_selectedRow == row && _selectedCol == col) {
-                      // Tapping same cell deselects
                       _selectedRow = null;
                       _selectedCol = null;
                     } else {
@@ -193,7 +193,7 @@ class _ProfitVisualizationScreenState
               ),
             ),
 
-            // Detail card (slides up when cell selected)
+            // Detail card
             AnimatedSize(
               duration: Anim.fast,
               curve: Anim.snappy,
@@ -210,24 +210,13 @@ class _ProfitVisualizationScreenState
                     )
                       .animate()
                       .fadeIn(duration: Anim.fast)
-                      .slideY(
-                          begin: 0.15, end: 0, curve: Anim.snappy)
+                      .slideY(begin: 0.15, end: 0, curve: Anim.snappy)
                   : const SizedBox.shrink(),
             ),
           ],
         );
       },
-      loading: () => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(color: AppColors.primary),
-            const SizedBox(height: 16),
-            Text('Calculating P&L...',
-                style: Theme.of(context).textTheme.bodyMedium),
-          ],
-        ),
-      ),
+      loading: () => _buildShimmerLoading(),
       error: (e, _) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -245,12 +234,53 @@ class _ProfitVisualizationScreenState
     );
   }
 
+  Widget _buildShimmerLoading() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Shimmer.fromColors(
+        baseColor: AppColors.surface,
+        highlightColor: AppColors.surfaceLight,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 140,
+              height: 24,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _headerButton(IconData icon, String tooltip, VoidCallback onTap) {
     return IconButton(
       onPressed: onTap,
-      icon: Icon(icon, color: AppColors.textSecondary, size: 20),
+      icon: Icon(icon, color: AppColors.textSecondary, size: 18),
       tooltip: tooltip,
-      splashRadius: 20,
+      padding: const EdgeInsets.all(6),
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
     );
   }
 
@@ -259,18 +289,16 @@ class _ProfitVisualizationScreenState
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 8,
+          height: 8,
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(2),
           ),
         ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(color: AppColors.textMuted, fontSize: 10),
-        ),
+        const SizedBox(width: 3),
+        Text(label,
+            style: const TextStyle(color: AppColors.textMuted, fontSize: 9)),
       ],
     );
   }

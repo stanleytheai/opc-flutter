@@ -4,44 +4,58 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../theme/colors.dart';
 import '../../theme/animations.dart';
 import '../../models/option.dart';
+import '../../models/option_chain.dart';
 import '../../providers/options_provider.dart';
-import '../../providers/calculation_provider.dart';
-import '../settings/settings_sheet.dart';
-import 'widgets/expiry_chips.dart';
-import 'widgets/option_card.dart';
-import 'widgets/selection_summary.dart';
-import 'widgets/legs_panel.dart';
+import '../../providers/ticker_provider.dart';
+import '../../widgets/shimmer_loading.dart';
+import 'widgets/expiry_tabs.dart';
+import 'widgets/option_chain_row.dart';
+import 'widgets/selected_options_panel.dart';
 
 class OptionSelectionScreen extends ConsumerStatefulWidget {
   final VoidCallback onNext;
   final VoidCallback onBack;
 
-  const OptionSelectionScreen({super.key, required this.onNext, required this.onBack});
+  const OptionSelectionScreen(
+      {super.key, required this.onNext, required this.onBack});
 
   @override
-  ConsumerState<OptionSelectionScreen> createState() => _OptionSelectionScreenState();
+  ConsumerState<OptionSelectionScreen> createState() =>
+      _OptionSelectionScreenState();
 }
 
-class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-  bool _showLegs = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
+class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> {
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _addToPosition(Option option, BuyOrSell action) {
+    final notifier = ref.read(selectedOptionsProvider.notifier);
+    final selected = ref.read(selectedOptionsProvider);
+    // Check if already selected
+    final idx =
+        selected.indexWhere((e) => e.option.optionMapKey == option.optionMapKey);
+    if (idx >= 0) {
+      // Toggle action if different, otherwise remove
+      if (selected[idx].action != action) {
+        notifier.updateAction(idx, action);
+      } else {
+        notifier.remove(idx);
+      }
+    } else {
+      notifier.add(option, action, quantity: 1);
+    }
   }
 
   void _toggleOption(Option option) {
     final notifier = ref.read(selectedOptionsProvider.notifier);
     final selected = ref.read(selectedOptionsProvider);
-    final idx = selected.indexWhere((e) => e.option.optionMapKey == option.optionMapKey);
+    final idx =
+        selected.indexWhere((e) => e.option.optionMapKey == option.optionMapKey);
     if (idx >= 0) {
       notifier.remove(idx);
     } else {
@@ -50,8 +64,9 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
   }
 
   bool _isSelected(Option option) {
-    final selected = ref.watch(selectedOptionsProvider);
-    return selected.any((e) => e.option.optionMapKey == option.optionMapKey);
+    return ref
+        .watch(selectedOptionsProvider)
+        .any((e) => e.option.optionMapKey == option.optionMapKey);
   }
 
   @override
@@ -60,190 +75,182 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
     final selectedExpiry = ref.watch(selectedExpirationProvider);
     final chain = ref.watch(optionChainProvider);
     final selectedEntries = ref.watch(selectedOptionsProvider);
-    final selectedCount = selectedEntries.length;
-    final strategy = ref.watch(detectedStrategyProvider);
-    final netCost = selectedEntries.fold<double>(0.0, (sum, e) {
-      final sign = e.action == BuyOrSell.buy ? -1 : 1;
-      return sum + sign * e.option.premium * e.quantity;
-    });
+    final tickerAsync = ref.watch(selectedTickerProvider);
+    final currentPrice = tickerAsync.valueOrNull?.lastPrice;
 
     return Column(
       children: [
-        // Expiry chips
-        Padding(
+        // Calls / Strike / Puts header labels
+        Container(
+          height: 22,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
               Expanded(
-                child: expirations.when(
-                  data: (dates) => ExpiryChips(
-                    expirations: dates,
-                    selected: selectedExpiry,
-                    onSelected: (d) => ref.read(selectedExpirationProvider.notifier).state = d,
-                  ),
-                  loading: () => const SizedBox(
-                    height: 48,
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary)),
-                  ),
-                  error: (e, _) => Text('Error loading dates', style: TextStyle(color: AppColors.loss)),
-                ),
+                child: Text('CALLS',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: AppColors.profit.withValues(alpha: 0.6),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1)),
               ),
-              IconButton(
-                onPressed: () => SettingsSheet.show(context),
-                icon: const Icon(Icons.tune_rounded, color: AppColors.textSecondary, size: 22),
-                tooltip: 'Calculation Settings',
+              const SizedBox(width: 72), // strike column space
+              Expanded(
+                child: Text('PUTS',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: AppColors.loss.withValues(alpha: 0.6),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1)),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 4),
 
-        // Strategy indicator
-        if (strategy != null && selectedCount > 0)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: GestureDetector(
-              onTap: () => setState(() => _showLegs = !_showLegs),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _sentimentColor(strategy.sentiment).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: _sentimentColor(strategy.sentiment).withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _sentimentIcon(strategy.sentiment),
-                      size: 14,
-                      color: _sentimentColor(strategy.sentiment),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      strategy.name,
-                      style: TextStyle(
-                        color: _sentimentColor(strategy.sentiment),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      _showLegs ? Icons.expand_less : Icons.expand_more,
-                      size: 16,
-                      color: _sentimentColor(strategy.sentiment),
-                    ),
-                  ],
-                ),
-              ),
-            ).animate().fadeIn(duration: Anim.fast),
+        // Expiration tabs
+        expirations.when(
+          data: (dates) => ExpiryTabs(
+            expirations: dates,
+            selected: selectedExpiry,
+            onSelected: (d) =>
+                ref.read(selectedExpirationProvider.notifier).state = d,
           ),
-
-        // Legs panel (expandable)
-        if (_showLegs && selectedCount > 0) const LegsPanel(),
-
-        // Calls / Puts tabs
-        TabBar(
-          controller: _tabController,
-          indicatorColor: AppColors.primary,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textSecondary,
-          tabs: const [
-            Tab(text: 'CALLS'),
-            Tab(text: 'PUTS'),
-          ],
+          loading: () => const ShimmerLoading(height: 36),
+          error: (e, _) => Padding(
+            padding: const EdgeInsets.all(8),
+            child: Text('Error loading dates',
+                style: TextStyle(color: AppColors.loss, fontSize: 12)),
+          ),
         ),
 
-        // Options list
+        // Column headers (Bid Ask Last OI Delta | Strike | Bid Ask Last OI Delta)
+        const OptionChainHeader(),
+
+        // Option chain list
         Expanded(
           child: selectedExpiry == null
               ? Center(
                   child: Text(
-                    'Select an expiration date',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                    'Select an expiration date above',
+                    style: TextStyle(
+                        color: AppColors.textMuted, fontSize: 13),
                   ).animate().fadeIn(duration: Anim.medium),
                 )
               : chain.when(
                   data: (chainData) {
                     if (chainData == null) {
-                      return Center(child: Text('No data', style: Theme.of(context).textTheme.bodyMedium));
+                      return Center(
+                          child: Text('No data',
+                              style: TextStyle(
+                                  color: AppColors.textMuted, fontSize: 13)));
                     }
-                    final calls = chainData.callsForExpiry(selectedExpiry);
-                    final puts = chainData.putsForExpiry(selectedExpiry);
-                    return TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildOptionList(calls),
-                        _buildOptionList(puts),
-                      ],
-                    );
+                    return _buildUnifiedChain(
+                        chainData, selectedExpiry, currentPrice);
                   },
-                  loading: () => const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  ),
-                  error: (e, _) => Center(child: Text('Error: $e')),
+                  loading: () => const ShimmerOptionList(),
+                  error: (e, _) => Center(
+                      child: Text('Error: $e',
+                          style: const TextStyle(color: AppColors.loss))),
                 ),
         ),
 
-        // Bottom summary bar
-        if (selectedCount > 0)
-          SelectionSummary(
-            selectedCount: selectedCount,
-            netCost: netCost,
-            strategyName: strategy?.name,
-            onNext: widget.onNext,
-          ).animate().slideY(begin: 1, end: 0, duration: Anim.fast, curve: Anim.snappy),
+        // Selected options panel
+        if (selectedEntries.isNotEmpty)
+          SelectedOptionsPanel(onCalculate: widget.onNext),
       ],
     );
   }
 
-  Widget _buildOptionList(List<Option> options) {
-    if (options.isEmpty) {
-      return Center(child: Text('No options available', style: Theme.of(context).textTheme.bodyMedium));
+  Widget _buildUnifiedChain(
+      OptionsChain chainData, String expiry, double? currentPrice) {
+    final strikes = chainData.strikes;
+    // strikes are already sorted ascending; we want descending (high to low)
+    final sortedStrikes = List<double>.from(strikes)..sort((a, b) => b.compareTo(a));
+
+    // Find where to insert the price marker
+    int priceMarkerIndex = -1;
+    if (currentPrice != null) {
+      for (int i = 0; i < sortedStrikes.length - 1; i++) {
+        if (sortedStrikes[i] >= currentPrice &&
+            sortedStrikes[i + 1] < currentPrice) {
+          priceMarkerIndex = i + 1;
+          break;
+        }
+      }
+      // Edge cases
+      if (priceMarkerIndex == -1) {
+        if (sortedStrikes.isNotEmpty && currentPrice >= sortedStrikes.first) {
+          priceMarkerIndex = 0;
+        } else if (sortedStrikes.isNotEmpty &&
+            currentPrice < sortedStrikes.last) {
+          priceMarkerIndex = sortedStrikes.length;
+        }
+      }
     }
+
+    // Total items = strikes + (1 if price marker)
+    final hasMarker = priceMarkerIndex >= 0;
+    final itemCount = sortedStrikes.length + (hasMarker ? 1 : 0);
+
+    // Scroll to price marker on first load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (hasMarker && _scrollController.hasClients) {
+        final targetOffset = priceMarkerIndex * 38.0 - 100;
+        if (targetOffset > 0 &&
+            _scrollController.position.pixels == 0) {
+          _scrollController.animateTo(
+            targetOffset,
+            duration: Anim.medium,
+            curve: Anim.smooth,
+          );
+        }
+      }
+    });
+
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: options.length,
+      controller: _scrollController,
+      itemCount: itemCount,
+      itemExtent: null,
+      padding: EdgeInsets.zero,
       itemBuilder: (_, i) {
-        final o = options[i];
-        return OptionCard(
-          option: o,
-          isSelected: _isSelected(o),
-          onTap: () => _toggleOption(o),
-        ).animate().fadeIn(
-          duration: Anim.fast,
-          delay: Anim.staggerDelay(i, interval: const Duration(milliseconds: 30)),
-        ).slideY(begin: 0.05, end: 0);
+        // Price marker line
+        if (hasMarker && i == priceMarkerIndex) {
+          return PriceMarkerLine(price: currentPrice!);
+        }
+
+        // Adjust index if past marker
+        final strikeIndex =
+            hasMarker && i > priceMarkerIndex ? i - 1 : i;
+        if (strikeIndex >= sortedStrikes.length) {
+          return const SizedBox.shrink();
+        }
+
+        final strike = sortedStrikes[strikeIndex];
+        final call = chainData.getOption(expiry, strike, OptionType.call);
+        final put = chainData.getOption(expiry, strike, OptionType.put);
+
+        // ITM: calls are ITM when strike < current price, puts when strike > current price
+        final isITMCall =
+            currentPrice != null ? strike < currentPrice : false;
+        final isITMPut =
+            currentPrice != null ? strike > currentPrice : false;
+
+        return OptionChainRow(
+          key: ValueKey(strike),
+          call: call,
+          put: put,
+          strike: strike,
+          isCallSelected: call != null && _isSelected(call),
+          isPutSelected: put != null && _isSelected(put),
+          isITMCall: isITMCall,
+          isITMPut: isITMPut,
+          onCallTap: call != null ? () => _toggleOption(call) : null,
+          onPutTap: put != null ? () => _toggleOption(put) : null,
+          onAddToPosition: _addToPosition,
+        );
       },
     );
-  }
-
-  Color _sentimentColor(String sentiment) {
-    switch (sentiment) {
-      case 'bullish':
-        return AppColors.profit;
-      case 'bearish':
-        return AppColors.loss;
-      case 'volatile':
-        return const Color(0xFFFF9800);
-      default:
-        return AppColors.primary;
-    }
-  }
-
-  IconData _sentimentIcon(String sentiment) {
-    switch (sentiment) {
-      case 'bullish':
-        return Icons.trending_up_rounded;
-      case 'bearish':
-        return Icons.trending_down_rounded;
-      case 'volatile':
-        return Icons.swap_vert_rounded;
-      default:
-        return Icons.horizontal_rule_rounded;
-    }
   }
 }
