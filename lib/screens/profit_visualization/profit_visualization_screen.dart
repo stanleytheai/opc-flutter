@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../theme/colors.dart';
 import '../../theme/animations.dart';
 import '../../providers/calculation_provider.dart';
+import '../../providers/options_provider.dart';
+import '../../providers/settings_provider.dart';
+import '../../providers/ticker_provider.dart';
+import '../../services/url_state_service.dart';
+import '../../screens/settings/settings_sheet.dart';
 import 'widgets/heatmap_grid.dart';
 import 'widgets/profit_detail_card.dart';
+import 'widgets/profit_summary_bar.dart';
 
 class ProfitVisualizationScreen extends ConsumerStatefulWidget {
   final VoidCallback onBack;
@@ -20,9 +27,43 @@ class _ProfitVisualizationScreenState extends ConsumerState<ProfitVisualizationS
   int? _selectedRow;
   int? _selectedCol;
 
+  void _shareLink() {
+    final ticker = ref.read(selectedTickerSymbolProvider);
+    final entries = ref.read(selectedOptionsProvider);
+    final settings = ref.read(settingsProvider);
+
+    final legs = entries.map((e) => SelectedLegParams(
+      strike: e.option.strike,
+      expiry: e.option.expiry,
+      callOrPut: e.option.callOrPut,
+      action: e.action,
+      quantity: e.quantity,
+    )).toList();
+
+    final url = UrlStateService.buildShareUrl(
+      baseUrl: Uri.base.origin + Uri.base.path,
+      ticker: ticker,
+      legs: legs,
+      settings: settings,
+    );
+
+    Clipboard.setData(ClipboardData(text: url));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Link copied to clipboard'),
+        backgroundColor: AppColors.surfaceLight,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profitTable = ref.watch(profitTableProvider);
+    final strategy = ref.watch(detectedStrategyProvider);
+    final summary = ref.watch(profitSummaryProvider);
 
     return profitTable.when(
       data: (table) {
@@ -39,8 +80,35 @@ class _ProfitVisualizationScreenState extends ConsumerState<ProfitVisualizationS
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               child: Row(
                 children: [
-                  Text('Profit & Loss', style: Theme.of(context).textTheme.headlineMedium),
-                  const Spacer(),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Profit & Loss', style: Theme.of(context).textTheme.headlineMedium),
+                        if (strategy != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              strategy.name,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => SettingsSheet.show(context),
+                    icon: const Icon(Icons.tune_rounded, color: AppColors.textSecondary, size: 20),
+                    tooltip: 'Settings',
+                  ),
+                  IconButton(
+                    onPressed: _shareLink,
+                    icon: const Icon(Icons.share_rounded, color: AppColors.textSecondary, size: 20),
+                    tooltip: 'Share link',
+                  ),
                   IconButton(
                     onPressed: widget.onBack,
                     icon: const Icon(Icons.edit_rounded, color: AppColors.textSecondary, size: 20),
@@ -49,6 +117,12 @@ class _ProfitVisualizationScreenState extends ConsumerState<ProfitVisualizationS
                 ],
               ),
             ).animate().fadeIn(duration: Anim.medium),
+
+            // Profit summary bar
+            if (summary != null)
+              ProfitSummaryBar(summary: summary)
+                  .animate()
+                  .fadeIn(duration: Anim.medium, delay: 100.ms),
 
             // Heatmap
             Expanded(

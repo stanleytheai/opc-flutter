@@ -1,21 +1,65 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/colors.dart';
 import '../theme/animations.dart';
+import '../services/url_state_service.dart';
+import '../providers/ticker_provider.dart';
+import '../providers/options_provider.dart';
+import '../providers/settings_provider.dart';
 import 'ticker_search/ticker_search_screen.dart';
 import 'option_selection/option_selection_screen.dart';
 import 'profit_visualization/profit_visualization_screen.dart';
 
-class WizardScreen extends StatefulWidget {
+class WizardScreen extends ConsumerStatefulWidget {
   const WizardScreen({super.key});
 
   @override
-  State<WizardScreen> createState() => _WizardScreenState();
+  ConsumerState<WizardScreen> createState() => _WizardScreenState();
 }
 
-class _WizardScreenState extends State<WizardScreen> {
+class _WizardScreenState extends ConsumerState<WizardScreen> {
   final _pageController = PageController();
   int _currentStep = 0;
+  bool _restoredFromUrl = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tryRestoreFromUrl();
+  }
+
+  /// Try to restore state from URL query parameters (web only).
+  void _tryRestoreFromUrl() {
+    if (!kIsWeb) return;
+
+    try {
+      final uri = Uri.base;
+      if (uri.queryParameters.isEmpty) return;
+
+      final decoded = UrlStateService.decode(uri.queryParameters);
+      if (decoded == null) return;
+
+      // Restore ticker
+      ref.read(selectedTickerSymbolProvider.notifier).state = decoded.ticker;
+
+      // Restore settings
+      ref.read(settingsProvider.notifier).setAll(decoded.settings);
+
+      _restoredFromUrl = true;
+      // Note: legs can't be fully restored without fetching option chain data.
+      // The ticker will be set, and user can proceed from step 2.
+      if (decoded.legs.isNotEmpty) {
+        // Jump to step 1 (option selection) after a tick
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _goToStep(1);
+        });
+      }
+    } catch (_) {
+      // Silently ignore URL parse errors
+    }
+  }
 
   void _goToStep(int step) {
     if (step < 0 || step > 2) return;
@@ -64,8 +108,9 @@ class _WizardScreenState extends State<WizardScreen> {
   }
 
   Widget _buildStepIndicator() {
+    final labels = ['Search', 'Select', 'Visualize'];
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
       child: Row(
         children: [
           if (_currentStep > 0)
@@ -83,19 +128,35 @@ class _WizardScreenState extends State<WizardScreen> {
                 final isDone = i < _currentStep;
                 return Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: AnimatedContainer(
-                    duration: Anim.fast,
-                    curve: Anim.snappy,
-                    width: isActive ? 40 : 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
-                      color: isActive
-                          ? AppColors.primary
-                          : isDone
-                              ? AppColors.primary.withValues(alpha: 0.5)
-                              : AppColors.surfaceLight,
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedContainer(
+                        duration: Anim.fast,
+                        curve: Anim.snappy,
+                        width: isActive ? 40 : 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          color: isActive
+                              ? AppColors.primary
+                              : isDone
+                                  ? AppColors.primary.withValues(alpha: 0.5)
+                                  : AppColors.surfaceLight,
+                        ),
+                      ),
+                      if (isActive) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          labels[i],
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 );
               }),

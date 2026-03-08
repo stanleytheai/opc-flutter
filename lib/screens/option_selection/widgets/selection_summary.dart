@@ -4,9 +4,16 @@ import '../../../theme/colors.dart';
 class SelectionSummary extends StatelessWidget {
   final int selectedCount;
   final double netCost;
+  final String? strategyName;
   final VoidCallback onNext;
 
-  const SelectionSummary({super.key, required this.selectedCount, required this.netCost, required this.onNext});
+  const SelectionSummary({
+    super.key,
+    required this.selectedCount,
+    required this.netCost,
+    this.strategyName,
+    required this.onNext,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,18 +25,32 @@ class SelectionSummary extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              '$selectedCount option${selectedCount == 1 ? '' : 's'}  ${netCost < 0 ? '-' : '+'}\$${netCost.abs().toStringAsFixed(0)}',
-              style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$selectedCount option${selectedCount == 1 ? '' : 's'}  ${netCost < 0 ? '-' : '+'}\$${netCost.abs().toStringAsFixed(0)}',
+                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
+                  ),
+                ),
+                if (strategyName != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    strategyName!,
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                  ),
+                ],
+              ],
             ),
           ),
-          const Spacer(),
           ElevatedButton.icon(
             onPressed: onNext,
             icon: const Icon(Icons.show_chart_rounded, size: 20),

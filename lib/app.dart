@@ -8,7 +8,6 @@ class OpcApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Set default animation duration globally
     Animate.restartOnHotReload = true;
 
     return MaterialApp(

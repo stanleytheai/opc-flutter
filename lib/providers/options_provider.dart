@@ -52,8 +52,24 @@ class SelectedOptionsNotifier extends StateNotifier<List<SelectedOptionEntry>> {
   }
 
   void updateQuantity(int index, int quantity) {
+    if (quantity < 1) return;
     final updated = [...state];
     updated[index] = updated[index].copyWith(quantity: quantity);
+    state = updated;
+  }
+
+  void updateAction(int index, BuyOrSell action) {
+    final updated = [...state];
+    updated[index] = updated[index].copyWith(action: action);
+    state = updated;
+  }
+
+  void toggleAction(int index) {
+    final updated = [...state];
+    final current = updated[index].action;
+    updated[index] = updated[index].copyWith(
+      action: current == BuyOrSell.buy ? BuyOrSell.sell : BuyOrSell.buy,
+    );
     state = updated;
   }
 
