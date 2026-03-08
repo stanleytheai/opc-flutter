@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/colors.dart';
 import '../theme/animations.dart';
+import '../models/option.dart';
 import '../services/url_state_service.dart';
 import '../providers/ticker_provider.dart';
 import '../providers/options_provider.dart';
@@ -48,16 +49,62 @@ class _WizardScreenState extends ConsumerState<WizardScreen> {
       ref.read(settingsProvider.notifier).setAll(decoded.settings);
 
       _restoredFromUrl = true;
-      // Note: legs can't be fully restored without fetching option chain data.
-      // The ticker will be set, and user can proceed from step 2.
+
       if (decoded.legs.isNotEmpty) {
-        // Jump to step 1 (option selection) after a tick
+        // Restore legs by fetching option chain data and matching
+        _restoreLegs(decoded.ticker, decoded.legs);
+      }
+    } catch (_) {
+      // Silently ignore URL parse errors
+    }
+  }
+
+  /// Fetch option chain data and restore legs from URL parameters.
+  Future<void> _restoreLegs(String ticker, List<SelectedLegParams> legParams) async {
+    try {
+      final service = ref.read(marketDataServiceProvider);
+      final notifier = ref.read(selectedOptionsProvider.notifier);
+
+      // Group legs by expiry to minimize API calls
+      final expiries = legParams.map((l) => l.expiry).toSet();
+
+      for (final expiry in expiries) {
+        final options = await service.getOptionChain(ticker, expiry);
+        final optionMap = <String, Option>{};
+        for (final opt in options) {
+          optionMap[opt.optionMapKey] = opt;
+        }
+
+        // Match each leg for this expiry
+        for (final leg in legParams.where((l) => l.expiry == expiry)) {
+          final key = '${leg.expiry}:${leg.strike}:${leg.callOrPut.code}';
+          final option = optionMap[key];
+          if (option != null) {
+            notifier.add(option, leg.action, quantity: leg.quantity);
+          }
+        }
+      }
+
+      // Set the first expiry as selected
+      if (expiries.isNotEmpty) {
+        ref.read(selectedExpirationProvider.notifier).state = expiries.first;
+      }
+
+      // Jump to visualization if legs were restored
+      if (ref.read(selectedOptionsProvider).isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _goToStep(2);
+        });
+      } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _goToStep(1);
         });
       }
     } catch (_) {
-      // Silently ignore URL parse errors
+      // If restoration fails, go to option selection
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _goToStep(1);
+      });
     }
   }
 

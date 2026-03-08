@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -22,21 +23,28 @@ class _TickerSearchScreenState extends ConsumerState<TickerSearchScreen> {
   List<TickerSearchResult> _results = [];
   Ticker? _selected;
   bool _loading = false;
+  Timer? _debounce;
 
-  void _onSearch(String query) async {
-    if (query.length < 1) {
-      setState(() => _results = []);
+  void _onSearch(String query) {
+    _debounce?.cancel();
+    if (query.length < 2) {
+      setState(() {
+        _results = [];
+        _loading = false;
+      });
       return;
     }
     setState(() => _loading = true);
-    try {
-      final results = await ref.read(tickerSearchProvider(query).future);
-      if (mounted) setState(() => _results = results);
-    } catch (_) {
-      // Handled by provider
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final results = await ref.read(tickerSearchProvider(query).future);
+        if (mounted) setState(() => _results = results);
+      } catch (_) {
+        // Handled by provider
+      } finally {
+        if (mounted) setState(() => _loading = false);
+      }
+    });
   }
 
   void _onSelect(TickerSearchResult result) async {
@@ -58,6 +66,7 @@ class _TickerSearchScreenState extends ConsumerState<TickerSearchScreen> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _controller.dispose();
     super.dispose();
   }

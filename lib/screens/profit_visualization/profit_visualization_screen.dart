@@ -64,6 +64,8 @@ class _ProfitVisualizationScreenState extends ConsumerState<ProfitVisualizationS
     final profitTable = ref.watch(profitTableProvider);
     final strategy = ref.watch(detectedStrategyProvider);
     final summary = ref.watch(profitSummaryProvider);
+    final tickerAsync = ref.watch(selectedTickerProvider);
+    final selectedEntries = ref.watch(selectedOptionsProvider);
 
     return profitTable.when(
       data: (table) {
@@ -130,6 +132,7 @@ class _ProfitVisualizationScreenState extends ConsumerState<ProfitVisualizationS
                 table: table,
                 selectedRow: _selectedRow,
                 selectedCol: _selectedCol,
+                currentPrice: tickerAsync.valueOrNull?.lastPrice,
                 onCellTap: (row, col) {
                   setState(() {
                     _selectedRow = row;
@@ -145,6 +148,7 @@ class _ProfitVisualizationScreenState extends ConsumerState<ProfitVisualizationS
                 table: table,
                 row: _selectedRow!,
                 col: _selectedCol!,
+                selectedOptions: selectedEntries,
                 onClose: () => setState(() {
                   _selectedRow = null;
                   _selectedCol = null;

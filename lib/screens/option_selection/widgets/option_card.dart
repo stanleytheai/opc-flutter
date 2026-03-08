@@ -90,15 +90,32 @@ class OptionCard extends StatelessWidget {
               ),
 
               // Greeks mini
-              if (option.delta != null)
-                Text(
-                  'Δ${option.delta!.toStringAsFixed(2)}',
-                  style: const TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w500),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (option.delta != null)
+                    _greekChip('Δ', option.delta!.toStringAsFixed(2)),
+                  if (option.gamma != null) ...[
+                    const SizedBox(width: 4),
+                    _greekChip('γ', option.gamma!.toStringAsFixed(3)),
+                  ],
+                  if (option.theta != null) ...[
+                    const SizedBox(width: 4),
+                    _greekChip('θ', option.theta!.toStringAsFixed(2)),
+                  ],
+                ],
+              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _greekChip(String symbol, String value) {
+    return Text(
+      '$symbol$value',
+      style: const TextStyle(color: AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w500),
     );
   }
 

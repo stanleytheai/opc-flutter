@@ -8,6 +8,7 @@ class HeatmapGrid extends StatefulWidget {
   final ProfitTable table;
   final int? selectedRow;
   final int? selectedCol;
+  final double? currentPrice;
   final void Function(int row, int col) onCellTap;
 
   const HeatmapGrid({
@@ -15,6 +16,7 @@ class HeatmapGrid extends StatefulWidget {
     required this.table,
     this.selectedRow,
     this.selectedCol,
+    this.currentPrice,
     required this.onCellTap,
   });
 
@@ -35,7 +37,6 @@ class _HeatmapGridState extends State<HeatmapGrid> {
   @override
   void initState() {
     super.initState();
-    // Sync horizontal scroll between header and grid
     _headerHorizontalController.addListener(_syncHeaderToGrid);
     _gridHorizontalController.addListener(_syncGridToHeader);
   }
@@ -66,6 +67,33 @@ class _HeatmapGridState extends State<HeatmapGrid> {
     super.dispose();
   }
 
+  /// Find the row index closest to the current stock price.
+  int? _currentPriceRow() {
+    if (widget.currentPrice == null) return null;
+    final prices = widget.table.prices;
+    if (prices.isEmpty) return null;
+    int closest = 0;
+    double minDiff = (prices[0] - widget.currentPrice!).abs();
+    for (int i = 1; i < prices.length; i++) {
+      final diff = (prices[i] - widget.currentPrice!).abs();
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = i;
+      }
+    }
+    return closest;
+  }
+
+  /// Find the column index for today's date.
+  int? _todayCol() {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    final dates = widget.table.dates;
+    for (int i = 0; i < dates.length; i++) {
+      if (dates[i] == today) return i;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final rows = widget.table.prices.length;
@@ -84,6 +112,9 @@ class _HeatmapGridState extends State<HeatmapGrid> {
       }
     }
 
+    final currentPriceRow = _currentPriceRow();
+    final todayCol = _todayCol();
+
     return Padding(
       padding: const EdgeInsets.all(8),
       child: Column(
@@ -101,12 +132,24 @@ class _HeatmapGridState extends State<HeatmapGrid> {
                     child: Row(
                       children: List.generate(cols, (c) {
                         final shortDate = _formatDate(widget.table.dates[c]);
+                        final isToday = c == todayCol;
+                        final isSelectedCol = c == widget.selectedCol;
                         return SizedBox(
                           width: _cellWidth,
                           child: Center(
                             child: Text(
                               shortDate,
-                              style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isToday
+                                    ? AppColors.primaryLight
+                                    : isSelectedCol
+                                        ? AppColors.textPrimary
+                                        : AppColors.textMuted,
+                                fontWeight: isToday || isSelectedCol
+                                    ? FontWeight.w700
+                                    : FontWeight.w400,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -127,7 +170,7 @@ class _HeatmapGridState extends State<HeatmapGrid> {
                 SizedBox(
                   width: _priceLabelWidth,
                   child: NotificationListener<ScrollNotification>(
-                    onNotification: (n) => true, // consume to prevent propagation
+                    onNotification: (n) => true,
                     child: ListView.builder(
                       controller: _verticalController,
                       physics: const NeverScrollableScrollPhysics(),
@@ -135,6 +178,8 @@ class _HeatmapGridState extends State<HeatmapGrid> {
                       itemExtent: _cellHeight,
                       itemBuilder: (_, r) {
                         final isBreakeven = _isBreakevenRow(r, cols);
+                        final isCurrentPrice = r == currentPriceRow;
+                        final isSelectedRow = r == widget.selectedRow;
                         return SizedBox(
                           height: _cellHeight,
                           child: Align(
@@ -145,10 +190,16 @@ class _HeatmapGridState extends State<HeatmapGrid> {
                                 '\$${widget.table.prices[r].toStringAsFixed(0)}',
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: isBreakeven
-                                      ? AppColors.primaryLight
-                                      : AppColors.textSecondary,
-                                  fontWeight: isBreakeven ? FontWeight.w700 : FontWeight.w400,
+                                  color: isCurrentPrice
+                                      ? AppColors.primary
+                                      : isBreakeven
+                                          ? AppColors.primaryLight
+                                          : isSelectedRow
+                                              ? AppColors.textPrimary
+                                              : AppColors.textSecondary,
+                                  fontWeight: isCurrentPrice || isBreakeven || isSelectedRow
+                                      ? FontWeight.w700
+                                      : FontWeight.w400,
                                 ),
                               ),
                             ),
@@ -178,6 +229,7 @@ class _HeatmapGridState extends State<HeatmapGrid> {
                           itemCount: rows,
                           itemExtent: _cellHeight,
                           itemBuilder: (_, r) {
+                            final isCurrentPriceRow = r == currentPriceRow;
                             return SizedBox(
                               height: _cellHeight,
                               child: Row(
@@ -186,6 +238,8 @@ class _HeatmapGridState extends State<HeatmapGrid> {
                                   final pct = (value / maxAbs * 100).clamp(-100.0, 100.0);
                                   final isSelected =
                                       r == widget.selectedRow && c == widget.selectedCol;
+                                  final isCrosshair = !isSelected &&
+                                      (r == widget.selectedRow || c == widget.selectedCol);
 
                                   return SizedBox(
                                     width: _cellWidth,
@@ -195,6 +249,8 @@ class _HeatmapGridState extends State<HeatmapGrid> {
                                         profitPercent: pct,
                                         value: value,
                                         isSelected: isSelected,
+                                        isCrosshair: isCrosshair,
+                                        isCurrentPrice: isCurrentPriceRow && !isSelected,
                                       ),
                                     ),
                                   );

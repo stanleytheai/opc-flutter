@@ -17,6 +17,10 @@ class SelectionSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDebit = netCost < 0;
+    final costLabel = isDebit ? 'Net Debit' : 'Net Credit';
+    final costColor = isDebit ? AppColors.loss : AppColors.profit;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: const BoxDecoration(
@@ -30,16 +34,25 @@ class SelectionSummary extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    '$selectedCount option${selectedCount == 1 ? '' : 's'}  ${netCost < 0 ? '-' : '+'}\$${netCost.abs().toStringAsFixed(0)}',
-                    style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '$selectedCount leg${selectedCount == 1 ? '' : 's'}',
+                        style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$costLabel: \$${netCost.abs().toStringAsFixed(0)}',
+                      style: TextStyle(color: costColor, fontWeight: FontWeight.w600, fontSize: 13),
+                    ),
+                  ],
                 ),
                 if (strategyName != null) ...[
                   const SizedBox(height: 4),

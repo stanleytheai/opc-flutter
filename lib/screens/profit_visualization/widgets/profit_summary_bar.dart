@@ -25,6 +25,7 @@ class ProfitSummaryBar extends StatelessWidget {
                 ? '+\$${summary.maxProfit.toStringAsFixed(0)}'
                 : '-\$${summary.maxProfit.abs().toStringAsFixed(0)}',
             AppColors.profit,
+            subtitle: 'at \$${summary.maxProfitPrice.toStringAsFixed(0)}',
           ),
           _divider(),
           _stat(
@@ -33,6 +34,7 @@ class ProfitSummaryBar extends StatelessWidget {
                 ? '+\$${summary.maxLoss.toStringAsFixed(0)}'
                 : '-\$${summary.maxLoss.abs().toStringAsFixed(0)}',
             AppColors.loss,
+            subtitle: 'at \$${summary.maxLossPrice.toStringAsFixed(0)}',
           ),
           _divider(),
           _stat(
@@ -49,7 +51,7 @@ class ProfitSummaryBar extends StatelessWidget {
     );
   }
 
-  Widget _stat(String label, String value, Color valueColor) {
+  Widget _stat(String label, String value, Color valueColor, {String? subtitle}) {
     return Expanded(
       child: Column(
         children: [
@@ -70,6 +72,14 @@ class ProfitSummaryBar extends StatelessWidget {
               fontSize: 10,
             ),
           ),
+          if (subtitle != null)
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: AppColors.textMuted,
+                fontSize: 9,
+              ),
+            ),
         ],
       ),
     );
@@ -78,7 +88,7 @@ class ProfitSummaryBar extends StatelessWidget {
   Widget _divider() {
     return Container(
       width: 1,
-      height: 28,
+      height: 32,
       margin: const EdgeInsets.symmetric(horizontal: 8),
       color: AppColors.border,
     );

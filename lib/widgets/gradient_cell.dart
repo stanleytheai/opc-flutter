@@ -5,12 +5,16 @@ class GradientCell extends StatelessWidget {
   final double profitPercent;
   final double value;
   final bool isSelected;
+  final bool isCrosshair;
+  final bool isCurrentPrice;
 
   const GradientCell({
     super.key,
     required this.profitPercent,
     required this.value,
     this.isSelected = false,
+    this.isCrosshair = false,
+    this.isCurrentPrice = false,
   });
 
   @override
@@ -21,11 +25,15 @@ class GradientCell extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.all(1),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.85),
+        color: isCrosshair
+            ? color.withValues(alpha: 0.55)
+            : color.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(4),
         border: isSelected
             ? Border.all(color: Colors.white, width: 2)
-            : null,
+            : isCurrentPrice
+                ? Border.all(color: AppColors.primary.withValues(alpha: 0.6), width: 1)
+                : null,
       ),
       alignment: Alignment.center,
       child: isSelected
