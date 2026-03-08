@@ -83,6 +83,8 @@ class OptionCard extends StatelessWidget {
                     _metric('Ask', option.ask.toStringAsFixed(2)),
                     const SizedBox(width: 12),
                     _metric('IV', '${option.impliedVolatility.toStringAsFixed(1)}%'),
+                    const SizedBox(width: 12),
+                    _metric('OI', option.openInterest.toString()),
                   ],
                 ),
               ),

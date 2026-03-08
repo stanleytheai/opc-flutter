@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../theme/colors.dart';
-import '../../../theme/animations.dart';
 import '../../../models/profit_table.dart';
 import '../../../widgets/gradient_cell.dart';
 
@@ -60,7 +59,7 @@ class HeatmapGrid extends StatelessWidget {
           ),
           const SizedBox(height: 4),
 
-          // Grid
+          // Grid — fade in as one unit (avoids per-cell stagger jank on large grids)
           Expanded(
             child: ListView.builder(
               itemCount: rows,
@@ -96,12 +95,7 @@ class HeatmapGrid extends StatelessWidget {
                               profitPercent: pct,
                               value: value,
                               isSelected: isSelected,
-                            )
-                                .animate()
-                                .fadeIn(
-                                  duration: Anim.fast,
-                                  delay: Anim.staggerDelay(r + c, interval: const Duration(milliseconds: 8)),
-                                ),
+                            ),
                           ),
                         );
                       }),
@@ -109,7 +103,7 @@ class HeatmapGrid extends StatelessWidget {
                   ),
                 );
               },
-            ),
+            ).animate().fadeIn(duration: const Duration(milliseconds: 300)),
           ),
         ],
       ),

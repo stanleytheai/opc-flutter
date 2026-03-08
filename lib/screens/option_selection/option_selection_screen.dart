@@ -56,7 +56,12 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
     final expirations = ref.watch(optionExpirationsProvider);
     final selectedExpiry = ref.watch(selectedExpirationProvider);
     final chain = ref.watch(optionChainProvider);
-    final selectedCount = ref.watch(selectedOptionsProvider).length;
+    final selectedEntries = ref.watch(selectedOptionsProvider);
+    final selectedCount = selectedEntries.length;
+    final netCost = selectedEntries.fold<double>(0.0, (sum, e) {
+      final sign = e.action == BuyOrSell.buy ? -1 : 1;
+      return sum + sign * e.option.premium * e.quantity;
+    });
 
     return Column(
       children: [
@@ -125,6 +130,7 @@ class _OptionSelectionScreenState extends ConsumerState<OptionSelectionScreen> w
         if (selectedCount > 0)
           SelectionSummary(
             selectedCount: selectedCount,
+            netCost: netCost,
             onNext: widget.onNext,
           ).animate().slideY(begin: 1, end: 0, duration: Anim.fast, curve: Anim.snappy),
       ],
