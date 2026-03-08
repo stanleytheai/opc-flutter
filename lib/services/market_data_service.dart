@@ -55,7 +55,14 @@ class MarketDataService {
         'greeks': 'true',
       }),
     );
-    return Ticker.fromTradierJson(json['quotes']['quote']);
+    final quotes = json['quotes'];
+    if (quotes == null || quotes['quote'] == null) {
+      throw Exception('No quote found for symbol: $symbol');
+    }
+    if (quotes['unmatched_symbols'] != null) {
+      throw Exception('Unmatched symbol: $symbol');
+    }
+    return Ticker.fromTradierJson(quotes['quote']);
   }
 
   Future<List<String>> getOptionExpirations(String symbol) async {
