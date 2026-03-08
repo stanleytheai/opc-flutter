@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/ticker.dart';
 import '../models/option.dart';
@@ -7,12 +6,6 @@ import '../models/option.dart';
 class MarketDataService {
   static const _baseUrl = 'https://sandbox.tradier.com/v1/markets';
   static const _token = 'Bearer vhelrOcGiNAYi6XnpM3z4IU93oi4';
-
-  /// CORS proxies to try in order (web only).
-  static const _corsProxies = [
-    'https://corsproxy.io/?',
-    'https://api.allorigins.win/raw?url=',
-  ];
 
   final http.Client _client;
   final Map<String, dynamic> _cache = {};
@@ -24,50 +17,19 @@ class MarketDataService {
         'Accept': 'application/json',
       };
 
+  /// Tradier sandbox sends Access-Control-Allow-Origin: * so direct
+  /// browser requests work fine — no CORS proxy needed.
   Future<Map<String, dynamic>> _getJson(Uri uri) async {
     final key = uri.toString();
     if (_cache.containsKey(key)) return _cache[key] as Map<String, dynamic>;
 
-    if (!kIsWeb) {
-      // Direct call for non-web platforms
-      final response = await _client.get(uri, headers: _headers);
-      if (response.statusCode != 200) {
-        throw Exception('API error: ${response.statusCode}');
-      }
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      _cache[key] = json;
-      return json;
+    final response = await _client.get(uri, headers: _headers);
+    if (response.statusCode != 200) {
+      throw Exception('API error: ${response.statusCode} — ${response.body}');
     }
-
-    // Web: try CORS proxies in order
-    Exception? lastError;
-    for (final proxy in _corsProxies) {
-      try {
-        final proxyUrl =
-            Uri.parse('$proxy${Uri.encodeComponent(uri.toString())}');
-        final response = await _client.get(proxyUrl, headers: _headers);
-        if (response.statusCode == 200) {
-          final json = jsonDecode(response.body) as Map<String, dynamic>;
-          _cache[key] = json;
-          return json;
-        }
-        lastError = Exception('HTTP ${response.statusCode}');
-      } catch (e) {
-        lastError = e is Exception ? e : Exception(e.toString());
-      }
-    }
-
-    // All proxies failed — try direct (may work if CORS headers are present)
-    try {
-      final response = await _client.get(uri, headers: _headers);
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        _cache[key] = json;
-        return json;
-      }
-    } catch (_) {}
-
-    throw lastError ?? Exception('All CORS proxies failed');
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    _cache[key] = json;
+    return json;
   }
 
   Future<List<TickerSearchResult>> searchTickers(String query) async {
