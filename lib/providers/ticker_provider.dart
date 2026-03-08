@@ -39,3 +39,18 @@ final selectedTickerProvider = FutureProvider<Ticker?>((ref) async {
   final service = ref.read(marketDataServiceProvider);
   return service.getQuote(symbol);
 });
+
+/// Tracks recently searched tickers (symbol + description).
+final recentTickersProvider =
+    StateNotifierProvider<RecentTickersNotifier, List<TickerSearchResult>>(
+        (ref) => RecentTickersNotifier());
+
+class RecentTickersNotifier extends StateNotifier<List<TickerSearchResult>> {
+  RecentTickersNotifier() : super([]);
+
+  void add(TickerSearchResult ticker) {
+    // Remove if already exists, then prepend
+    final filtered = state.where((t) => t.symbol != ticker.symbol).toList();
+    state = [ticker, ...filtered].take(8).toList();
+  }
+}

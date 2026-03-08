@@ -4,6 +4,7 @@ import '../../../theme/colors.dart';
 import '../../../models/option.dart';
 
 /// A single row in the unified option chain: call data | strike | put data.
+/// The entire row is swipeable to add call or put to position.
 class OptionChainRow extends StatelessWidget {
   final Option? call;
   final Option? put;
@@ -32,8 +33,8 @@ class OptionChainRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 38,
+    final rowContent = Container(
+      height: 42,
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -46,12 +47,11 @@ class OptionChainRow extends StatelessWidget {
         children: [
           // Call side
           Expanded(
-            child: _buildSide(
+            child: _OptionSide(
               option: call,
               isSelected: isCallSelected,
               isITM: isITMCall,
               onTap: onCallTap,
-              isCall: true,
             ),
           ),
           // Strike price center column
@@ -80,36 +80,139 @@ class OptionChainRow extends StatelessWidget {
           ),
           // Put side
           Expanded(
-            child: _buildSide(
+            child: _OptionSide(
               option: put,
               isSelected: isPutSelected,
               isITM: isITMPut,
               onTap: onPutTap,
-              isCall: false,
             ),
           ),
         ],
       ),
     );
-  }
 
-  Widget _buildSide({
-    required Option? option,
-    required bool isSelected,
-    required bool isITM,
-    required VoidCallback? onTap,
-    required bool isCall,
-  }) {
+    // Wrap entire row with slidable
+    if (onAddToPosition != null && (call != null || put != null)) {
+      return Slidable(
+        key: ValueKey('row_${strike}_slidable'),
+        startActionPane: call != null
+            ? ActionPane(
+                motion: const StretchMotion(),
+                extentRatio: 0.35,
+                children: [
+                  CustomSlidableAction(
+                    onPressed: (_) =>
+                        onAddToPosition!(call!, BuyOrSell.buy),
+                    backgroundColor: AppColors.profit,
+                    foregroundColor: Colors.white,
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_circle_outline_rounded, size: 20),
+                        SizedBox(height: 2),
+                        Text('Buy Call',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                  CustomSlidableAction(
+                    onPressed: (_) =>
+                        onAddToPosition!(call!, BuyOrSell.sell),
+                    backgroundColor: AppColors.loss,
+                    foregroundColor: Colors.white,
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.remove_circle_outline_rounded, size: 20),
+                        SizedBox(height: 2),
+                        Text('Sell Call',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : null,
+        endActionPane: put != null
+            ? ActionPane(
+                motion: const StretchMotion(),
+                extentRatio: 0.35,
+                children: [
+                  CustomSlidableAction(
+                    onPressed: (_) =>
+                        onAddToPosition!(put!, BuyOrSell.buy),
+                    backgroundColor: AppColors.profit,
+                    foregroundColor: Colors.white,
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.add_circle_outline_rounded, size: 20),
+                        SizedBox(height: 2),
+                        Text('Buy Put',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                  CustomSlidableAction(
+                    onPressed: (_) =>
+                        onAddToPosition!(put!, BuyOrSell.sell),
+                    backgroundColor: AppColors.loss,
+                    foregroundColor: Colors.white,
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.remove_circle_outline_rounded, size: 20),
+                        SizedBox(height: 2),
+                        Text('Sell Put',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ],
+              )
+            : null,
+        child: rowContent,
+      );
+    }
+
+    return rowContent;
+  }
+}
+
+/// One side (call or put) of the option chain row.
+class _OptionSide extends StatelessWidget {
+  final Option? option;
+  final bool isSelected;
+  final bool isITM;
+  final VoidCallback? onTap;
+
+  const _OptionSide({
+    required this.option,
+    required this.isSelected,
+    required this.isITM,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     if (option == null) {
       return const SizedBox.expand();
     }
 
-    final content = GestureDetector(
+    return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Container(
         color: isSelected
-            ? AppColors.primary.withValues(alpha: 0.08)
+            ? AppColors.primary.withValues(alpha: 0.1)
             : isITM
                 ? AppColors.primary.withValues(alpha: 0.03)
                 : Colors.transparent,
@@ -119,20 +222,20 @@ class OptionChainRow extends StatelessWidget {
             if (isSelected)
               Container(
                 width: 3,
-                height: 20,
+                height: 22,
                 margin: const EdgeInsets.only(right: 4),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-            _cell(option.bid.toStringAsFixed(2), flex: 2),
-            _cell(option.ask.toStringAsFixed(2), flex: 2),
-            _cell(option.last.toStringAsFixed(2), flex: 2),
-            _cell(_formatVolume(option.openInterest), flex: 2),
+            _cell(option!.bid.toStringAsFixed(2), flex: 2),
+            _cell(option!.ask.toStringAsFixed(2), flex: 2),
+            _cell(option!.last.toStringAsFixed(2), flex: 2),
+            _cell(_formatVolume(option!.openInterest), flex: 2),
             _cell(
-              option.delta != null
-                  ? option.delta!.toStringAsFixed(2)
+              option!.delta != null
+                  ? option!.delta!.toStringAsFixed(2)
                   : '-',
               flex: 2,
               color: AppColors.textMuted,
@@ -141,48 +244,6 @@ class OptionChainRow extends StatelessWidget {
         ),
       ),
     );
-
-    // Wrap with slidable for swipe actions
-    if (onAddToPosition != null) {
-      return Slidable(
-        key: ValueKey('${option.optionMapKey}_slidable'),
-        startActionPane: ActionPane(
-          motion: const BehindMotion(),
-          extentRatio: 0.45,
-          children: [
-            CustomSlidableAction(
-              onPressed: (_) => onAddToPosition!(option, BuyOrSell.buy),
-              backgroundColor: AppColors.profit.withValues(alpha: 0.9),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_rounded, size: 16),
-                  Text('Buy', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            CustomSlidableAction(
-              onPressed: (_) => onAddToPosition!(option, BuyOrSell.sell),
-              backgroundColor: AppColors.loss.withValues(alpha: 0.9),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: const Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.remove_rounded, size: 16),
-                  Text('Sell', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        child: content,
-      );
-    }
-
-    return content;
   }
 
   Widget _cell(String text, {int flex = 1, Color? color}) {
